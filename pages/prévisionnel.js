@@ -9,7 +9,6 @@ Il s'agit de générer la vue de prévisionnel naturelle pour les personnes avec
 Cette vue là peut-être considéréé comme une pivot table de la liste des conso.
 
 
-
 */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
@@ -21,6 +20,10 @@ import { filterMonthRowRecords } from "../lib/month.mjs";
 
 registerAllModules();
 
+
+const COL_MOIS = ""
+const COL_TOTAL = "Cout_TTC"
+const COL_NB_JOURS = "Nb_jours_numerique"
 
 export default function PreviewPage() {
   const hotRef = useRef(null);
@@ -42,41 +45,33 @@ export default function PreviewPage() {
     window.grist.onRecords((records) => {
       setData(records);
     });
-    async function fetchMonths() {
-      const recordData = await window.grist.docApi.fetchTable(
-        "Mois_de_facturation",
-      );
-      setAllMonths(recordData);
-    }
-    fetchMonths();
   }, []);
-
-  useEffect(() => {
-    if (!allMonths) {
-      return
-    }
-    setMonths(filterMonthRowRecords(allMonths, period));
-  }, [allMonths, period]);
 
   useEffect(() => {
     if (!data?.length) {
       setRowData([]);
+      setMonths([]);
       return;
     }
+
+    const monthMap = {}
+
     const dataByNames = {};
     data.forEach((r) => {
-      const personKey = [r.Personne, r.Domaine].join(" - ");
+      monthMap[data.Periode] = []
+      const personKey = [r.Qui, r.Produit].join(" - ");
       dataByNames[personKey] = dataByNames[personKey] || {
         Personne: personKey,
         values: {},
       };
-      dataByNames[personKey].values[r.Mois] =
-        dataByNames[personKey].values[r.Mois] || [];
-      dataByNames[personKey].values[r.Mois].push(r);
+      dataByNames[personKey].values[r.Periode] =
+        dataByNames[personKey].values[r.Periode] || [];
+      dataByNames[personKey].values[r.Periode].push(r);
     });
     const names = Object.keys(dataByNames);
     names.sort();
     setRowData(names.map((n) => dataByNames[n]));
+    setMonths(Object.keys(monthMap));
   }, [data]);
 
   const accSum = (a, v) => a + (v || 0);
@@ -88,8 +83,8 @@ export default function PreviewPage() {
       return [
         person.Personne,
         ...months.map((m, i) => {
-          return person.values[m.Mois_de_facturation]
-            ?.map((v) => v.Nb_jours_factures)
+          return person.values[m]
+            ?.map((v) => v [COL_NB_JOURS])
             .reduce(accSum, 0);
         }),
       ];
@@ -100,8 +95,8 @@ export default function PreviewPage() {
       const v = months
         .map((m) => {
           const person = rowData[i];
-          return person.values[m.Mois_de_facturation]
-            ?.map((v) => v.Total_Facture_TTC)
+          return person.values[m]
+            ?.map((v) => v[COL_TOTAL])
             .reduce(accSum, 0);
         })
         .reduce(accSum, 0);
@@ -111,19 +106,20 @@ export default function PreviewPage() {
     const sumData = months.map((m) => {
       const total = rowData
         .map((r) => {
-          return r.values[m.Mois_de_facturation]
-            ?.map((v) => v.Total_Facture_TTC)
+          return r.values[m]
+            ?.map((v) => v[COL_TOTAL])
             .reduce(accSum, 0);
         })
         .reduce(accSum, 0);
       return total;
     });
+
     const fullSum = sumData.reduce(accSum, 0);
     sumData.push("");
     sumData.push(fullSum);
 
     setTableData([...data, [], ["Total", ...sumData.map(amountDisplay)]]);
-  }, [rowData, months]);
+  }, [rowData]);
 
   useEffect(() => {
     buildTableData();
@@ -132,7 +128,7 @@ export default function PreviewPage() {
   const getCellData = useCallback(
     (row, column) => {
       const details = rowData[row];
-      return details?.values?.[months[column - 1]?.Mois_de_facturation];
+      return details?.values?.[months[column - 1]];
     },
     [rowData, months],
   );
@@ -170,24 +166,24 @@ export default function PreviewPage() {
         const newValue = change[3] || 0;
 
         const rowDetails = rowData[row];
-        const rowId = rowDetails.values[month.Mois_de_facturation]?.[0]?.id;
+        const rowId = rowDetails.values[month]?.[0]?.id;
         if (rowId) {
           return {
             require: { id: rowId },
             fields: {
-              Nb_jours_factures: newValue,
+              [COL_NB_JOURS]: newValue,
             },
           };
         }
         const mm = Object.keys(rowDetails.values);
         const firstConso = rowDetails.values[mm[0]][0];
         const p = firstConso.ProchainContrat.rowIds[0];
-        const m = months[column - 1].id;
+        const m = months[column - 1];
         return {
           fields: {
             Contrat_Freelance: p,
             Mois: m,
-            Nb_jours_factures: newValue,
+            [COL_NB_JOURS]: newValue,
           },
           require: {
             Contrat_Freelance: p,
@@ -223,7 +219,7 @@ export default function PreviewPage() {
         rowHeaders={false}
         colHeaders={[
           "Personne",
-          ...(months.map((m) => m.Mois_de_facturation) || []),
+          ...(months.map((m) => m) || []),
           "",
           "Total",
         ]}
@@ -257,7 +253,7 @@ export default function PreviewPage() {
                 cellProperties.readOnly = true;
               }
               if (
-                input.filter((c) => c.Statut === "Réalisé").length ===
+                input.filter((c) => c.Statut === "Consommé").length ===
                 input.length
               ) {
                 classNames.push("bold");
@@ -279,6 +275,10 @@ export default function PreviewPage() {
           Les nombres de jours en <b>gras</b> sont indiqués comme « Réalisé ».
           Pour cette raison, ils ne sont pas modifiables.
         </p>
+        <details>
+          <summary>Données brutes</summary>
+          <pre>{ JSON.stringify(data, null, 2) }</pre>
+        </details>
       </div>
     </>
   );

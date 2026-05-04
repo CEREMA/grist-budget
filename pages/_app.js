@@ -1,4 +1,5 @@
 import "@/styles/globals.css";
+import "@/styles/pico.min.css";
 import "handsontable/styles/handsontable.min.css";
 import "handsontable/styles/ht-theme-main.min.css";
 
