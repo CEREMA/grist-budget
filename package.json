@@ -1,14 +1,13 @@
 {
-  "name": "grist-previsionnel",
+  "name": "grist-budget",
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "concurrently 'next dev' 'npm run flask:dev'",
+    "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "prettier": "prettier --write pages components lib styles",
-    "flask:dev": "flask --app grist_budget_agriculture.app run --debug --port 5328"
+    "prettier": "prettier --write pages components lib styles"
   },
   "dependencies": {
     "@handsontable/react-wrapper": "^15.0.0",
